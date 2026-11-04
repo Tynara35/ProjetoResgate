@@ -1,0 +1,16 @@
+{
+  "name": "Gestão de Despesas - Projeto Resgate",
+  "short_name": "Resgate Despesas",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#2563eb",
+  "description": "Ferramenta de acompanhamento de despesas fixas, variáveis e reembolsos do Projeto Resgate.",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2620/2620905.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
