@@ -1237,13 +1237,26 @@ function renderLancamentos(){
             </tr>
           </thead>
           <tbody>
-            ${filtered.map(t => `
+            ${filtered.map(t => {
+              let pixInfo = '';
+              const contact = state.contacts.find(c => c.name === t.beneficiary);
+              if (contact && (contact.bank || contact.doc)) {
+                const parts = [];
+                if (contact.bank) parts.push(esc(contact.bank));
+                if (contact.doc) parts.push(esc(contact.doc));
+                pixInfo = `<div class="hint" style="margin-top:2px; font-size:10px; color:var(--text-light); max-width:200px; white-space:normal; line-height:1.2;">${parts.join(' | ')}</div>`;
+              }
+              
+              return `
               <tr>
                 <td>${fmtDate(t.date)}</td>
                 <td><span class="badge ${t.type}">${t.type === 'fixed' ? 'Fixa' : t.type === 'variable' ? 'Variável' : 'Reembolso'}</span></td>
                 <td>${esc(t.category)}</td>
                 <td>${esc(t.description)}${t.notes ? '<div class="hint">' + esc(t.notes) + '</div>' : ''}</td>
-                <td>${esc(t.beneficiary) || '—'}</td>
+                <td>
+                  ${esc(t.beneficiary) || '—'}
+                  ${pixInfo}
+                </td>
                 <td class="num">${fmtBRL(t.amount)}</td>
                 <td><span class="badge ${t.status}">${t.type === 'reimbursement' ? REIMB_STATUS_LABELS[t.status] : STATUS_LABELS[t.status]}</span></td>
                 <td class="actions">
@@ -1252,7 +1265,8 @@ function renderLancamentos(){
                   <button class="btn btn-sm btn-danger" onclick="removeTx('${t.id}')">Excluir</button>
                 </td>
               </tr>
-            `).join('')}
+              `;
+            }).join('')}
           </tbody>
           <tfoot>
             <tr>
@@ -1967,7 +1981,7 @@ function renderConfig(){
     <div class="panel">
       <div class="panel-header"><h2>Sobre</h2></div>
       <div style="padding:18px;font-size:13px;color:var(--text-light);line-height:1.7">
-        <p><strong>Gestão de Despesas — Projeto Resgate</strong> · v2.6</p>
+        <p><strong>Gestão de Despesas — Projeto Resgate</strong> · v2.7</p>
         <p>Ferramenta executada localmente no navegador. Não envia dados para servidores.</p>
       </div>
     </div>
