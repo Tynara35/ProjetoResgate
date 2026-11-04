@@ -1929,7 +1929,7 @@ function renderBarChart(rows){
       ${rows.map(r => {
         const h = Math.max(2, Math.round((r.total / max) * 180));
         return `<div class="bar" title="${monthLabel(r.key)}: ${fmtBRL(r.total)}">
-          <div class="bar-value">${r.total > 0 ? 'R + Math.round(r.total/1000) + 'k' : ''}</div>
+          <div class="bar-value">${r.total > 0 ? 'R$' + Math.round(r.total/1000) + 'k' : ''}</div>
           <div class="bar-inner" style="height:${h}px"></div>
           <div class="bar-label">${monthLabelShort(r.key)}</div>
         </div>`;
