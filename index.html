@@ -71,6 +71,14 @@ td.actions{text-align:right;white-space:nowrap}
 .filters label{font-size:10px;font-weight:600;color:var(--text-light);text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:3px}
 .filters select,.filters input{width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:inherit;background:#fff}
 .filters select:focus,.filters input:focus{outline:none;border-color:var(--primary)}
+.multi-select { position: relative; user-select: none; cursor: pointer; width: 100%; }
+.ms-btn { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; font-size: 12px; font-family: inherit; background: #fff; text-align: left; display: flex; justify-content: space-between; align-items: center; }
+.ms-btn:focus { outline: none; border-color: var(--primary); }
+.ms-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid var(--border); border-radius: 5px; box-shadow: 0 4px 6px -1px rgba(0,0,0,.1); z-index: 100; max-height: 200px; overflow-y: auto; margin-top: 4px; display: none; padding: 4px; }
+.ms-dropdown.show { display: block; }
+.ms-item { display: flex; align-items: center; gap: 6px; padding: 6px 8px; font-size: 12px; border-radius: 4px; cursor: pointer; }
+.ms-item:hover { background: #f8fafc; }
+.ms-item input { cursor: pointer; margin: 0; }
 .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
 .modal-overlay.show{display:flex}
 .modal{background:#fff;border-radius:10px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto}
@@ -110,7 +118,7 @@ td.actions{text-align:right;white-space:nowrap}
 .benef-group:last-child{border-bottom:none}
 .benef-head{padding:12px 18px;display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr;gap:10px;align-items:center;cursor:pointer;transition:.15s}
 .benef-head:hover{background:#f8fafc}
-.benef-head .name{font-weight:600;font-size:13px}
+.benef-head .name{font-weight:600;font-size:13px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px}
 .benef-head .metric{font-size:12px;color:var(--text-light);text-align:right}
 .benef-head .metric strong{color:var(--text);display:block;font-size:13px}
 .benef-head .metric.pending strong{color:var(--danger)}
@@ -272,6 +280,7 @@ function buildSeed(){
   add('2026-01','2026-01-05','reimbursement','Férias','Samuel — férias',267,'Samuel Macena','PIX');
   add('2026-01','2026-01-05','reimbursement','Férias','Valéria — férias',125,'Valéria','PIX');
   add('2026-01','2026-01-20','reimbursement','Outros','Teonia — reembolso de despesas pagas',690,'Teonia Ferreira','PIX');
+  add('2026-01','2026-01-10','fixed','Encargos','Escritório fiscal Samuel',50.92,'Samuel Macena','Boleto');
   add('2026-01','2026-01-10','fixed','Encargos','Escritório fiscal Marco',49.69,'Marco Túlio','Boleto');
   add('2026-01','2026-01-20','fixed','Encargos','Escritório fiscal Teonia',90,'Teonia Ferreira','Boleto');
   add('2026-01','2026-01-20','fixed','Encargos','DAS MEI Samuel',75.60,'Samuel Macena','Boleto');
@@ -1056,7 +1065,21 @@ function renderCategorySummary(transactions){
 }
 
 /* ============ LANÇAMENTOS ============ */
-let filterState = { type:'', category:'', status:'', beneficiary:'', search:'', dateFrom:'', dateTo:'' };
+let filterState = { type:[], category:[], status:'', beneficiary:[], search:'', dateFrom:'', dateTo:'' };
+let openDropdown = null;
+
+function toggleDropdown(id) {
+  openDropdown = openDropdown === id ? null : id;
+  renderLancamentos();
+}
+
+function toggleFilter(key, val) {
+  const arr = filterState[key];
+  const idx = arr.indexOf(val);
+  if (idx >= 0) arr.splice(idx, 1);
+  else arr.push(val);
+  renderLancamentos();
+}
 
 function parseFilterDate(val) {
     if (!val) return '';
@@ -1082,10 +1105,10 @@ function getFilteredTransactions(key) {
   const to = parseFilterDate(filterState.dateTo);
 
   return m.transactions.filter(t => {
-    if (filterState.type && t.type !== filterState.type) return false;
-    if (filterState.category && t.category !== filterState.category) return false;
+    if (filterState.type.length > 0 && !filterState.type.includes(t.type)) return false;
+    if (filterState.category.length > 0 && !filterState.category.includes(t.category)) return false;
     if (filterState.status && t.status !== filterState.status) return false;
-    if (filterState.beneficiary && t.beneficiary !== filterState.beneficiary) return false;
+    if (filterState.beneficiary.length > 0 && !filterState.beneficiary.includes(t.beneficiary)) return false;
     if (from && t.date < from) return false;
     if (to && t.date > to) return false;
     if (filterState.search) {
@@ -1107,6 +1130,9 @@ function renderLancamentos(){
   const filtered = getFilteredTransactions(key);
   const filteredTotal = filtered.reduce((s,t) => s + Number(t.amount||0), 0);
 
+  const typeLabels = { fixed: 'Fixa', variable: 'Variável', reimbursement: 'Reembolso' };
+  const types = ['fixed', 'variable', 'reimbursement'];
+
   const html = `
     <div class="panel">
       <div class="panel-header">
@@ -1118,23 +1144,46 @@ function renderLancamentos(){
           <button class="btn btn-sm" onclick="printMonthlyReport()">🖨️ PDF</button>
         </div>
       </div>
-      <div class="filters">
+      <div class="filters" onclick="event.stopPropagation()">
+        <!-- Tipo Multi-select -->
         <div>
           <label>Tipo</label>
-          <select onchange="filterState.type=this.value;renderLancamentos()">
-            <option value="">Todos</option>
-            <option value="fixed" ${filterState.type==='fixed'?'selected':''}>Fixa</option>
-            <option value="variable" ${filterState.type==='variable'?'selected':''}>Variável</option>
-            <option value="reimbursement" ${filterState.type==='reimbursement'?'selected':''}>Reembolso</option>
-          </select>
+          <div class="multi-select">
+            <button class="ms-btn" onclick="event.stopPropagation(); toggleDropdown('type')">
+              <span>${filterState.type.length === 0 ? 'Todos' : `${filterState.type.length} selec.`}</span>
+              <span>▼</span>
+            </button>
+            <div class="ms-dropdown ${openDropdown === 'type' ? 'show' : ''}" onclick="event.stopPropagation()">
+              ${types.map(t => `
+                <label class="ms-item">
+                  <input type="checkbox" value="${t}" ${filterState.type.includes(t) ? 'checked' : ''} onchange="toggleFilter('type', this.value)">
+                  ${typeLabels[t]}
+                </label>
+              `).join('')}
+            </div>
+          </div>
         </div>
+
+        <!-- Categoria Multi-select -->
         <div>
           <label>Categoria</label>
-          <select onchange="filterState.category=this.value;renderLancamentos()">
-            <option value="">Todas</option>
-            ${cats.map(c => `<option ${filterState.category===c?'selected':''}>${esc(c)}</option>`).join('')}
-          </select>
+          <div class="multi-select">
+            <button class="ms-btn" onclick="event.stopPropagation(); toggleDropdown('category')">
+              <span>${filterState.category.length === 0 ? 'Todas' : `${filterState.category.length} selec.`}</span>
+              <span>▼</span>
+            </button>
+            <div class="ms-dropdown ${openDropdown === 'category' ? 'show' : ''}" onclick="event.stopPropagation()">
+              ${cats.map(c => `
+                <label class="ms-item">
+                  <input type="checkbox" value="${esc(c)}" ${filterState.category.includes(c) ? 'checked' : ''} onchange="toggleFilter('category', this.value)">
+                  ${esc(c)}
+                </label>
+              `).join('')}
+            </div>
+          </div>
         </div>
+
+        <!-- Status Single -->
         <div>
           <label>Status</label>
           <select onchange="filterState.status=this.value;renderLancamentos()">
@@ -1143,13 +1192,26 @@ function renderLancamentos(){
             <option value="pending" ${filterState.status==='pending'?'selected':''}>Pendente</option>
           </select>
         </div>
+
+        <!-- Beneficiário Multi-select -->
         <div>
           <label>Beneficiário</label>
-          <select onchange="filterState.beneficiary=this.value;renderLancamentos()">
-            <option value="">Todos</option>
-            ${beneficiaries.map(b => `<option ${filterState.beneficiary===b?'selected':''}>${esc(b)}</option>`).join('')}
-          </select>
+          <div class="multi-select">
+            <button class="ms-btn" onclick="event.stopPropagation(); toggleDropdown('beneficiary')">
+              <span>${filterState.beneficiary.length === 0 ? 'Todos' : `${filterState.beneficiary.length} selec.`}</span>
+              <span>▼</span>
+            </button>
+            <div class="ms-dropdown ${openDropdown === 'beneficiary' ? 'show' : ''}" onclick="event.stopPropagation()">
+              ${beneficiaries.map(b => `
+                <label class="ms-item">
+                  <input type="checkbox" value="${esc(b)}" ${filterState.beneficiary.includes(b) ? 'checked' : ''} onchange="toggleFilter('beneficiary', this.value)">
+                  ${esc(b)}
+                </label>
+              `).join('')}
+            </div>
+          </div>
         </div>
+
         <div>
           <label>Data de</label>
           <input type="text" placeholder="Ex: 05 ou 05/11" value="${esc(filterState.dateFrom)}" onchange="filterState.dateFrom=this.value;renderLancamentos()">
@@ -1208,7 +1270,8 @@ function renderLancamentos(){
   document.getElementById('view-lancamentos').innerHTML = html;
 }
 function clearFilters(){
-  filterState = { type:'', category:'', status:'', beneficiary:'', search:'', dateFrom:'', dateTo:'' };
+  filterState = { type:[], category:[], status:'', beneficiary:[], search:'', dateFrom:'', dateTo:'' };
+  openDropdown = null;
   renderLancamentos();
 }
 
@@ -1254,10 +1317,23 @@ function renderBeneficiarios(){
           <input placeholder="Buscar pessoa..." value="${esc(benefSearch)}" oninput="benefSearch=this.value;renderBeneficiarios()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit">
         </div>
       </div>
-      ${list.length === 0 ? '<div class="empty">Nenhum beneficiário encontrado.</div>' : list.map(b => `
+      ${list.length === 0 ? '<div class="empty">Nenhum beneficiário encontrado.</div>' : list.map(b => {
+        const contact = state.contacts.find(x => x.name === b.name);
+        let pixHTML = '';
+        if (contact && contact.bank) {
+          const safeBank = contact.bank.replace(/'/g, "\\'").replace(/"/g, '\\"');
+          pixHTML = `<div class="hint" style="margin-top:4px; font-weight:normal; color:var(--text-light); font-size:11px; display:flex; align-items:center; gap:4px;">PIX: ${esc(contact.bank)} <button class="btn-copy" onclick="event.stopPropagation(); copyText('${safeBank}')">📋</button></div>`;
+        } else if (contact && contact.doc) {
+          pixHTML = `<div class="hint" style="margin-top:4px; font-weight:normal; color:var(--text-light); font-size:11px;">Doc: ${esc(contact.doc)}</div>`;
+        }
+        
+        return `
         <div class="benef-group">
           <div class="benef-head" onclick="toggleBenef('${esc(b.name).replace(/'/g,'&#39;')}')">
-            <div class="name">${esc(b.name)} <span class="tag">${b.count} lançamentos</span></div>
+            <div class="name">
+              <div>${esc(b.name)} <span class="tag">${b.count} lançamentos</span></div>
+              ${pixHTML}
+            </div>
             <div class="metric">Total<strong>${fmtBRL(b.total)}</strong></div>
             <div class="metric">Fixas<strong>${fmtBRL(b.fixed)}</strong></div>
             <div class="metric">Variáveis<strong>${fmtBRL(b.variable - b.reimbursement)}</strong></div>
@@ -1285,7 +1361,8 @@ function renderBeneficiarios(){
             </div>
           ` : ''}
         </div>
-      `).join('')}
+        `;
+      }).join('')}
     </div>
   `;
   document.getElementById('view-beneficiarios').innerHTML = html;
@@ -1852,7 +1929,7 @@ function renderBarChart(rows){
       ${rows.map(r => {
         const h = Math.max(2, Math.round((r.total / max) * 180));
         return `<div class="bar" title="${monthLabel(r.key)}: ${fmtBRL(r.total)}">
-          <div class="bar-value">${r.total > 0 ? 'R$' + Math.round(r.total/1000) + 'k' : ''}</div>
+          <div class="bar-value">${r.total > 0 ? 'R + Math.round(r.total/1000) + 'k' : ''}</div>
           <div class="bar-inner" style="height:${h}px"></div>
           <div class="bar-label">${monthLabelShort(r.key)}</div>
         </div>`;
@@ -1890,7 +1967,7 @@ function renderConfig(){
     <div class="panel">
       <div class="panel-header"><h2>Sobre</h2></div>
       <div style="padding:18px;font-size:13px;color:var(--text-light);line-height:1.7">
-        <p><strong>Gestão de Despesas — Projeto Resgate</strong> · v2.5</p>
+        <p><strong>Gestão de Despesas — Projeto Resgate</strong> · v2.6</p>
         <p>Ferramenta executada localmente no navegador. Não envia dados para servidores.</p>
       </div>
     </div>
@@ -2218,7 +2295,7 @@ function printMonthlyReport(){
   const w = window.open('', '_blank');
   if (!w){ toast('Permita popups para gerar o PDF', 'error'); return; }
   
-  const hasFilters = filterState.type || filterState.category || filterState.status || filterState.beneficiary || filterState.search || filterState.dateFrom || filterState.dateTo;
+  const hasFilters = filterState.type.length > 0 || filterState.category.length > 0 || filterState.status || filterState.beneficiary.length > 0 || filterState.search || filterState.dateFrom || filterState.dateTo;
   let filteredTx = null;
   
   if (hasFilters) {
@@ -2290,6 +2367,16 @@ function init(){
   updateFileStatus();
   getMonth(state.currentMonth);
   renderDashboard();
+
+  // Fechar dropdowns ao clicar fora
+  document.addEventListener('click', () => {
+    if (openDropdown) {
+      openDropdown = null;
+      if (document.getElementById('view-lancamentos').classList.contains('active')) {
+        renderLancamentos();
+      }
+    }
+  });
 
   window.addEventListener('beforeunload', (e) => {
     if (hasUnsavedFileChanges) {
