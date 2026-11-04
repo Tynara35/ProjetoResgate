@@ -130,6 +130,10 @@ td.actions{text-align:right;white-space:nowrap}
 .data-row .lbl{color:var(--text-light);font-weight:500;font-size:11px;text-transform:uppercase}
 .data-row .val{font-weight:600;display:flex;align-items:center}
 .actions-corner{position:absolute;top:12px;right:12px;display:flex;gap:6px}
+.note-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:16px;position:relative;display:flex;flex-direction:column;gap:8px;}
+.note-card h3{font-size:14px;font-weight:600;color:var(--primary)}
+.note-card .content-box{background:#f8fafc;border:1px solid var(--border);border-radius:6px;padding:10px;font-family:monospace;font-size:13px;word-break:break-all;white-space:pre-wrap;flex:1;max-height:150px;overflow-y:auto;}
+.note-card .footer-actions{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
 @media (max-width:768px){
   main{padding:12px}
   .form-row,.form-row-3{grid-template-columns:1fr}
@@ -166,6 +170,7 @@ td.actions{text-align:right;white-space:nowrap}
   <button data-view="reembolsos" onclick="showView('reembolsos')">Reembolsos</button>
   <button data-view="beneficiarios" onclick="showView('beneficiarios')">Beneficiários</button>
   <button data-view="fixas" onclick="showView('fixas')">Modelos Fixos</button>
+  <button data-view="anotacoes" onclick="showView('anotacoes')">Anotações</button>
   <button data-view="dados" onclick="showView('dados')">Dados e Acessos</button>
   <button data-view="relatorios" onclick="showView('relatorios')">Relatório Anual</button>
   <button data-view="config" onclick="showView('config')">Config</button>
@@ -177,6 +182,7 @@ td.actions{text-align:right;white-space:nowrap}
   <div class="view" id="view-reembolsos"></div>
   <div class="view" id="view-beneficiarios"></div>
   <div class="view" id="view-fixas"></div>
+  <div class="view" id="view-anotacoes"></div>
   <div class="view" id="view-dados"></div>
   <div class="view" id="view-relatorios"></div>
   <div class="view" id="view-config"></div>
@@ -213,7 +219,7 @@ function getDefaultContacts() {
     { id: uid(), name: 'Natália Sayonara', doc: 'CPF: 01592758304', bank: '' },
     { id: uid(), name: 'Valéria', doc: 'CPF: 02241132322', bank: '' },
     { id: uid(), name: 'Natanael', doc: '', bank: 'Telefone PIX: 85991584203' },
-    { id: uid(), name: 'Marco (MEI) / M. Túlio', doc: 'CNPJ: 046.507.304/0001-40', bank: 'AG. 5386 C/C 0027760-6' },
+    { id: uid(), name: 'Marco Túlio', doc: 'CNPJ: 046.507.304/0001-40', bank: 'AG. 5386 C/C 0027760-6' },
     { id: uid(), name: 'Evanildo Luciano', doc: '', bank: 'AG. 1379 C/C 98198-2' },
     { id: uid(), name: 'Taynara Bandeira', doc: 'CPF: 05934989332', bank: '' },
     { id: uid(), name: 'Teonia Ferreira', doc: 'CPF: 23147938387 | CNPJ: 38.032.260/0001-11', bank: '' },
@@ -239,7 +245,7 @@ function getDefaultServices() {
 function buildSeed(){
   const months = {};
   const add = (monthKey, dateStr, type, cat, desc, amt, ben, pay, notes, status='paid') => {
-    if (!months[monthKey]) months[monthKey] = { transactions: [], populated: true };
+    if (!months[monthKey]) months[monthKey] = { transactions: [], populated: true, notes: [] };
     months[monthKey].transactions.push({
       id: uid(), date: dateStr, type, category: cat, description: desc,
       amount: Number(amt), beneficiary: ben || '', paymentMethod: pay || '—',
@@ -254,7 +260,7 @@ function buildSeed(){
   add('2026-01','2026-01-05','fixed','Colaboradores','Natália (1ª quinzena)',350,'Natália Sayonara','PIX');
   add('2026-01','2026-01-05','fixed','Colaboradores','Valéria (1ª quinzena)',350,'Valéria');
   add('2026-01','2026-01-05','fixed','Colaboradores','Natanael',250,'Natanael','PIX');
-  add('2026-01','2026-01-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco (MEI)','Transferência');
+  add('2026-01','2026-01-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco Túlio','Transferência');
   add('2026-01','2026-01-05','fixed','Colaboradores','Escritório de contabilidade',300,'Evanildo Luciano','Transferência');
   add('2026-01','2026-01-05','fixed','Colaboradores','Financeiro',200,'Taynara Bandeira','PIX');
   add('2026-01','2026-01-20','fixed','Colaboradores','Samuel (2ª quinzena)',800,'Samuel Macena','Transferência');
@@ -266,12 +272,11 @@ function buildSeed(){
   add('2026-01','2026-01-05','reimbursement','Férias','Samuel — férias',267,'Samuel Macena','PIX');
   add('2026-01','2026-01-05','reimbursement','Férias','Valéria — férias',125,'Valéria','PIX');
   add('2026-01','2026-01-20','reimbursement','Outros','Teonia — reembolso de despesas pagas',690,'Teonia Ferreira','PIX');
-  add('2026-01','2026-01-10','fixed','Encargos','Escritório fiscal Samuel',50.92,'Samuel Macena','Boleto');
-  add('2026-01','2026-01-10','fixed','Encargos','Escritório fiscal Marco',49.69,'Marco (MEI)','Boleto');
+  add('2026-01','2026-01-10','fixed','Encargos','Escritório fiscal Marco',49.69,'Marco Túlio','Boleto');
   add('2026-01','2026-01-20','fixed','Encargos','Escritório fiscal Teonia',90,'Teonia Ferreira','Boleto');
   add('2026-01','2026-01-20','fixed','Encargos','DAS MEI Samuel',75.60,'Samuel Macena','Boleto');
   add('2026-01','2026-01-20','fixed','Encargos','DAS MEI João',75.60,'João José de Abreu','Boleto');
-  add('2026-01','2026-01-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco (MEI)','Boleto');
+  add('2026-01','2026-01-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco Túlio','Boleto');
   add('2026-01','2026-01-20','fixed','Encargos','DAS MEI Teonia',75.60,'Teonia Ferreira','Boleto');
   add('2026-01','2026-01-10','fixed','Estrutura','Energia elétrica — Matriz',98.84);
   add('2026-01','2026-01-10','fixed','Estrutura','Energia elétrica — Casa de apoio',416.55);
@@ -292,7 +297,7 @@ function buildSeed(){
   add('2026-02','2026-02-05','fixed','Colaboradores','João (1ª quinzena)',950,'João José de Abreu','PIX');
   add('2026-02','2026-02-05','fixed','Colaboradores','Natália (1ª quinzena)',405,'Natália Sayonara','PIX');
   add('2026-02','2026-02-05','fixed','Colaboradores','Valéria (1ª quinzena)',405,'Valéria');
-  add('2026-02','2026-02-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco (MEI)','Transferência');
+  add('2026-02','2026-02-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco Túlio','Transferência');
   add('2026-02','2026-02-05','fixed','Colaboradores','Escritório de contabilidade',320.40,'Evanildo Luciano','Transferência');
   add('2026-02','2026-02-05','fixed','Colaboradores','Financeiro',213.60,'Taynara Bandeira','PIX');
   add('2026-02','2026-02-20','fixed','Colaboradores','Samuel (2ª quinzena)',810.50,'Samuel Macena','Transferência');
@@ -300,15 +305,15 @@ function buildSeed(){
   add('2026-02','2026-02-20','fixed','Colaboradores','Natália (2ª quinzena)',405,'Natália Sayonara','PIX');
   add('2026-02','2026-02-20','fixed','Colaboradores','Valéria (2ª quinzena)',405,'Valéria');
   add('2026-02','2026-02-20','fixed','Colaboradores','Teonia (resp. técnica)',2000,'Teonia Ferreira','PIX');
-  add('2026-02','2026-02-20','fixed','Colaboradores','M. Túlio (2ª quinzena)',1500,'Marco (MEI)','Transferência');
+  add('2026-02','2026-02-20','fixed','Colaboradores','M. Túlio (2ª quinzena)',1500,'Marco Túlio','Transferência');
   add('2026-02','2026-02-20','fixed','Colaboradores','Jurandir (2ª quinzena)',875,'Jurandir Silva','Transferência');
   add('2026-02','2026-02-20','reimbursement','Outros','Teonia — reembolso de despesas pagas',690,'Teonia Ferreira','PIX');
   add('2026-02','2026-02-10','fixed','Encargos','Escritório fiscal Samuel',50.92,'Samuel Macena','Boleto');
-  add('2026-02','2026-02-10','fixed','Encargos','Escritório fiscal Marco',49.67,'Marco (MEI)','Boleto');
+  add('2026-02','2026-02-10','fixed','Encargos','Escritório fiscal Marco',49.67,'Marco Túlio','Boleto');
   add('2026-02','2026-02-20','fixed','Encargos','Escritório fiscal Teonia',90,'Teonia Ferreira','Boleto');
   add('2026-02','2026-02-20','fixed','Encargos','DAS MEI Samuel',75.60,'Samuel Macena','Boleto');
   add('2026-02','2026-02-20','fixed','Encargos','DAS MEI João',75.60,'João José de Abreu','Boleto');
-  add('2026-02','2026-02-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco (MEI)','Boleto');
+  add('2026-02','2026-02-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco Túlio','Boleto');
   add('2026-02','2026-02-20','fixed','Encargos','DAS MEI Teonia',75.60,'Teonia Ferreira','Boleto');
   add('2026-02','2026-02-10','fixed','Estrutura','Energia elétrica — Matriz',93.99);
   add('2026-02','2026-02-10','fixed','Estrutura','Energia elétrica — Casa de apoio',496.15);
@@ -329,7 +334,7 @@ function buildSeed(){
   add('2026-03','2026-03-05','fixed','Colaboradores','João (1ª quinzena)',950,'João José de Abreu','PIX');
   add('2026-03','2026-03-05','fixed','Colaboradores','Natália (1ª quinzena)',405,'Natália Sayonara','PIX');
   add('2026-03','2026-03-05','fixed','Colaboradores','Valéria (1ª quinzena)',405,'Valéria');
-  add('2026-03','2026-03-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco (MEI)','Transferência');
+  add('2026-03','2026-03-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco Túlio','Transferência');
   add('2026-03','2026-03-05','fixed','Colaboradores','Escritório de contabilidade',320.40,'Evanildo Luciano','Transferência');
   add('2026-03','2026-03-05','fixed','Colaboradores','Financeiro',213.60,'Taynara Bandeira','PIX');
   add('2026-03','2026-03-20','fixed','Colaboradores','Samuel (2ª quinzena)',810.50,'Samuel Macena','Transferência');
@@ -337,16 +342,16 @@ function buildSeed(){
   add('2026-03','2026-03-20','fixed','Colaboradores','Natália (2ª quinzena)',405,'Natália Sayonara','PIX');
   add('2026-03','2026-03-20','fixed','Colaboradores','Valéria (2ª quinzena)',405,'Valéria');
   add('2026-03','2026-03-20','fixed','Colaboradores','Teonia (resp. técnica)',2000,'Teonia Ferreira','PIX');
-  add('2026-03','2026-03-20','fixed','Colaboradores','M. Túlio (2ª quinzena)',1500,'Marco (MEI)','Transferência');
+  add('2026-03','2026-03-20','fixed','Colaboradores','M. Túlio (2ª quinzena)',1500,'Marco Túlio','Transferência');
   add('2026-03','2026-03-20','fixed','Colaboradores','Jurandir (2ª quinzena)',875,'Jurandir Silva','Transferência');
   add('2026-03','2026-03-20','reimbursement','Férias','Jurandir — férias',1600,'Jurandir Silva','Transferência');
   add('2026-03','2026-03-20','reimbursement','Outros','Teonia — reembolso de despesas pagas',690,'Teonia Ferreira','PIX');
   add('2026-03','2026-03-10','fixed','Encargos','Escritório fiscal Samuel',50.92,'Samuel Macena','Boleto');
-  add('2026-03','2026-03-10','fixed','Encargos','Escritório fiscal Marco',49.67,'Marco (MEI)','Boleto');
+  add('2026-03','2026-03-10','fixed','Encargos','Escritório fiscal Marco',49.67,'Marco Túlio','Boleto');
   add('2026-03','2026-03-20','fixed','Encargos','Escritório fiscal Teonia',90,'Teonia Ferreira','Boleto');
   add('2026-03','2026-03-20','fixed','Encargos','DAS MEI Samuel',75.60,'Samuel Macena','Boleto');
   add('2026-03','2026-03-20','fixed','Encargos','DAS MEI João',75.60,'João José de Abreu','Boleto');
-  add('2026-03','2026-03-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco (MEI)','Boleto');
+  add('2026-03','2026-03-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco Túlio','Boleto');
   add('2026-03','2026-03-20','fixed','Encargos','DAS MEI Teonia',75.60,'Teonia Ferreira','Boleto');
   add('2026-03','2026-03-10','fixed','Estrutura','Energia elétrica — Matriz',93.99);
   add('2026-03','2026-03-10','fixed','Estrutura','Energia elétrica — Casa de apoio',0);
@@ -366,7 +371,7 @@ function buildSeed(){
   add('2026-04','2026-04-05','fixed','Colaboradores','João (1ª quinzena)',950,'João José de Abreu','PIX');
   add('2026-04','2026-04-05','fixed','Colaboradores','Natália (1ª quinzena)',405,'Natália Sayonara','PIX');
   add('2026-04','2026-04-05','fixed','Colaboradores','Valéria (1ª quinzena)',405,'Valéria');
-  add('2026-04','2026-04-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco (MEI)','Transferência');
+  add('2026-04','2026-04-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco Túlio','Transferência');
   add('2026-04','2026-04-05','fixed','Colaboradores','Escritório de contabilidade',320.40,'Evanildo Luciano','Transferência');
   add('2026-04','2026-04-05','fixed','Colaboradores','Financeiro',213.60,'Taynara Bandeira','PIX');
   add('2026-04','2026-04-20','fixed','Colaboradores','Samuel (quinzena)',1000,'Samuel Macena','Transferência');
@@ -374,17 +379,17 @@ function buildSeed(){
   add('2026-04','2026-04-20','fixed','Colaboradores','Natália (2ª quinzena)',405,'Natália Sayonara','PIX');
   add('2026-04','2026-04-20','fixed','Colaboradores','Valéria (2ª quinzena)',405,'Valéria');
   add('2026-04','2026-04-20','fixed','Colaboradores','Teonia (resp. técnica)',2000,'Teonia Ferreira','PIX');
-  add('2026-04','2026-04-20','fixed','Colaboradores','M. Túlio (2ª quinzena)',1500,'Marco (MEI)','Transferência');
+  add('2026-04','2026-04-20','fixed','Colaboradores','M. Túlio (2ª quinzena)',1500,'Marco Túlio','Transferência');
   add('2026-04','2026-04-20','fixed','Colaboradores','Jurandir (2ª quinzena)',875,'Jurandir Silva','Transferência');
   add('2026-04','2026-04-05','reimbursement','Manutenção','João — reembolso manutenção moto',410.25,'João José de Abreu','PIX');
   add('2026-04','2026-04-20','reimbursement','Férias','Jurandir — férias',1600,'Jurandir Silva','Transferência');
   add('2026-04','2026-04-20','reimbursement','Outros','Teonia — reembolso de despesas pagas',690,'Teonia Ferreira','PIX');
   add('2026-04','2026-04-10','fixed','Encargos','Escritório fiscal Samuel',50.92,'Samuel Macena','Boleto');
-  add('2026-04','2026-04-10','fixed','Encargos','Escritório fiscal Marco',49.67,'Marco (MEI)','Boleto');
+  add('2026-04','2026-04-10','fixed','Encargos','Escritório fiscal Marco',49.67,'Marco Túlio','Boleto');
   add('2026-04','2026-04-20','fixed','Encargos','Escritório fiscal Teonia',90,'Teonia Ferreira','Boleto');
   add('2026-04','2026-04-20','fixed','Encargos','DAS MEI Samuel',75.60,'Samuel Macena','Boleto');
   add('2026-04','2026-04-20','fixed','Encargos','DAS MEI João',75.60,'João José de Abreu','Boleto');
-  add('2026-04','2026-04-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco (MEI)','Boleto');
+  add('2026-04','2026-04-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco Túlio','Boleto');
   add('2026-04','2026-04-20','fixed','Encargos','DAS MEI Teonia',75.60,'Teonia Ferreira','Boleto');
   add('2026-04','2026-04-10','fixed','Estrutura','Energia elétrica — Matriz',97.49);
   add('2026-04','2026-04-10','fixed','Estrutura','Energia elétrica — Casa de apoio',927.28);
@@ -405,7 +410,7 @@ function buildSeed(){
   add('2026-05','2026-05-05','fixed','Colaboradores','João (1ª quinzena)',950,'João José de Abreu','PIX');
   add('2026-05','2026-05-05','fixed','Colaboradores','Natália (1ª quinzena)',405,'Natália Sayonara','PIX');
   add('2026-05','2026-05-05','fixed','Colaboradores','Valéria (1ª quinzena)',405,'Valéria');
-  add('2026-05','2026-05-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco (MEI)','Transferência');
+  add('2026-05','2026-05-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco Túlio','Transferência');
   add('2026-05','2026-05-05','fixed','Colaboradores','Escritório de contabilidade',320.40,'Evanildo Luciano','Transferência');
   add('2026-05','2026-05-05','fixed','Colaboradores','Financeiro',213.60,'Taynara Bandeira','PIX');
   add('2026-05','2026-05-20','fixed','Colaboradores','Samuel (quinzena)',1000,'Samuel Macena','Transferência');
@@ -414,18 +419,18 @@ function buildSeed(){
   add('2026-05','2026-05-20','fixed','Colaboradores','Natália (2ª quinzena)',405,'Natália Sayonara','PIX');
   add('2026-05','2026-05-20','fixed','Colaboradores','Valéria (2ª quinzena)',405,'Valéria');
   add('2026-05','2026-05-20','fixed','Colaboradores','Teonia (resp. técnica)',2000,'Teonia Ferreira','PIX');
-  add('2026-05','2026-05-20','fixed','Colaboradores','M. Túlio (2ª quinzena)',1500,'Marco (MEI)','Transferência');
+  add('2026-05','2026-05-20','fixed','Colaboradores','M. Túlio (2ª quinzena)',1500,'Marco Túlio','Transferência');
   add('2026-05','2026-05-20','fixed','Colaboradores','Jurandir (2ª quinzena)',875,'Jurandir Silva','Transferência');
   add('2026-05','2026-05-05','reimbursement','Manutenção','João — reembolso manutenção moto',410.25,'João José de Abreu','PIX');
   add('2026-05','2026-05-05','reimbursement','Outros','João — reembolso',205,'João José de Abreu','PIX');
   add('2026-05','2026-05-20','reimbursement','Férias','Jurandir — férias',1600,'Jurandir Silva','Transferência');
   add('2026-05','2026-05-20','reimbursement','Outros','Teonia — reembolso de despesas pagas',690,'Teonia Ferreira','PIX');
   add('2026-05','2026-05-10','fixed','Encargos','Escritório fiscal Samuel',52.86,'Samuel Macena','Boleto');
-  add('2026-05','2026-05-10','fixed','Encargos','Escritório fiscal Marco',51.60,'Marco (MEI)','Boleto');
+  add('2026-05','2026-05-10','fixed','Encargos','Escritório fiscal Marco',51.60,'Marco Túlio','Boleto');
   add('2026-05','2026-05-20','fixed','Encargos','Escritório fiscal Teonia',90,'Teonia Ferreira','Boleto');
   add('2026-05','2026-05-20','fixed','Encargos','DAS MEI Samuel',75.60,'Samuel Macena','Boleto');
   add('2026-05','2026-05-20','fixed','Encargos','DAS MEI João',75.60,'João José de Abreu','Boleto');
-  add('2026-05','2026-05-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco (MEI)','Boleto');
+  add('2026-05','2026-05-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco Túlio','Boleto');
   add('2026-05','2026-05-20','fixed','Encargos','DAS MEI Teonia',75.60,'Teonia Ferreira','Boleto');
   add('2026-05','2026-05-10','fixed','Estrutura','Energia elétrica — Matriz',97.49);
   add('2026-05','2026-05-10','fixed','Estrutura','Energia elétrica — Casa de apoio',927.28);
@@ -447,7 +452,7 @@ function buildSeed(){
   add('2026-06','2026-06-05','fixed','Colaboradores','João (1ª quinzena)',900,'João José de Abreu','PIX');
   add('2026-06','2026-06-05','fixed','Colaboradores','Natália (1ª quinzena)',405,'Natália Sayonara','PIX');
   add('2026-06','2026-06-05','fixed','Colaboradores','Valéria (1ª quinzena)',405,'Valéria');
-  add('2026-06','2026-06-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco (MEI)','Transferência');
+  add('2026-06','2026-06-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco Túlio','Transferência');
   add('2026-06','2026-06-05','fixed','Colaboradores','Escritório de contabilidade',320.40,'Evanildo Luciano','Transferência');
   add('2026-06','2026-06-05','fixed','Colaboradores','Financeiro',213.60,'Taynara Bandeira','PIX');
   add('2026-06','2026-06-20','fixed','Colaboradores','Matheus Ferreira (2ª quinzena)',810.50,'Matheus Ferreira','PIX');
@@ -455,16 +460,16 @@ function buildSeed(){
   add('2026-06','2026-06-20','fixed','Colaboradores','Natália (2ª quinzena)',405,'Natália Sayonara','PIX');
   add('2026-06','2026-06-20','fixed','Colaboradores','Valéria (2ª quinzena)',405,'Valéria');
   add('2026-06','2026-06-20','fixed','Colaboradores','Teonia (resp. técnica)',2000,'Teonia Ferreira','PIX');
-  add('2026-06','2026-06-20','fixed','Colaboradores','M. Túlio (2ª quinzena)',1500,'Marco (MEI)','Transferência');
+  add('2026-06','2026-06-20','fixed','Colaboradores','M. Túlio (2ª quinzena)',1500,'Marco Túlio','Transferência');
   add('2026-06','2026-06-20','fixed','Colaboradores','Jurandir (2ª quinzena)',875,'Jurandir Silva','Transferência');
   add('2026-06','2026-06-20','reimbursement','Férias','Jurandir — férias',1600,'Jurandir Silva','Transferência');
   add('2026-06','2026-06-20','reimbursement','Outros','Teonia — reembolso de despesas pagas',690,'Teonia Ferreira','PIX');
   add('2026-06','2026-06-10','fixed','Encargos','Escritório fiscal Samuel',52.86,'Samuel Macena','Boleto');
-  add('2026-06','2026-06-10','fixed','Encargos','Escritório fiscal Marco',51.60,'Marco (MEI)','Boleto');
+  add('2026-06','2026-06-10','fixed','Encargos','Escritório fiscal Marco',51.60,'Marco Túlio','Boleto');
   add('2026-06','2026-06-20','fixed','Encargos','Escritório fiscal Teonia',90,'Teonia Ferreira','Boleto');
   add('2026-06','2026-06-20','fixed','Encargos','DAS MEI Samuel',75.60,'Samuel Macena','Boleto');
   add('2026-06','2026-06-20','fixed','Encargos','DAS MEI João',75.60,'João José de Abreu','Boleto');
-  add('2026-06','2026-06-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco (MEI)','Boleto');
+  add('2026-06','2026-06-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco Túlio','Boleto');
   add('2026-06','2026-06-20','fixed','Encargos','DAS MEI Teonia',75.60,'Teonia Ferreira','Boleto');
   add('2026-06','2026-06-10','fixed','Estrutura','Energia elétrica — Matriz',103.11);
   add('2026-06','2026-06-10','fixed','Estrutura','Energia elétrica — Casa de apoio',927.28);
@@ -490,7 +495,7 @@ function buildSeed(){
   add('2026-07','2026-07-05','fixed','Colaboradores','João (1ª quinzena)',900,'João José de Abreu','PIX');
   add('2026-07','2026-07-05','fixed','Colaboradores','Natália (1ª quinzena)',405,'Natália Sayonara','PIX');
   add('2026-07','2026-07-05','fixed','Colaboradores','Valéria (1ª quinzena)',405,'Valéria');
-  add('2026-07','2026-07-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco (MEI)','Transferência');
+  add('2026-07','2026-07-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco Túlio','Transferência');
   add('2026-07','2026-07-05','fixed','Colaboradores','Escritório de contabilidade',320.40,'Evanildo Luciano','Transferência');
   add('2026-07','2026-07-05','fixed','Colaboradores','Financeiro',213.60,'Taynara Bandeira','PIX');
   add('2026-07','2026-07-20','fixed','Colaboradores','Matheus Ferreira (2ª quinzena)',810.50,'Matheus Ferreira','PIX');
@@ -498,16 +503,16 @@ function buildSeed(){
   add('2026-07','2026-07-20','fixed','Colaboradores','Natália (2ª quinzena)',405,'Natália Sayonara','PIX');
   add('2026-07','2026-07-20','fixed','Colaboradores','Valéria (2ª quinzena)',405,'Valéria');
   add('2026-07','2026-07-20','fixed','Colaboradores','Teonia (resp. técnica)',2000,'Teonia Ferreira','PIX');
-  add('2026-07','2026-07-20','fixed','Colaboradores','M. Túlio (2ª quinzena)',1500,'Marco (MEI)','Transferência');
+  add('2026-07','2026-07-20','fixed','Colaboradores','M. Túlio (2ª quinzena)',1500,'Marco Túlio','Transferência');
   add('2026-07','2026-07-20','fixed','Colaboradores','Jurandir (2ª quinzena)',875,'Jurandir Silva','Transferência');
   add('2026-07','2026-07-20','reimbursement','Férias','Jurandir — férias',1600,'Jurandir Silva','Transferência');
   add('2026-07','2026-07-20','reimbursement','Outros','Teonia — reembolso de despesas pagas',690,'Teonia Ferreira','PIX');
   add('2026-07','2026-07-10','fixed','Encargos','Escritório fiscal Samuel',52.86,'Samuel Macena','Boleto');
-  add('2026-07','2026-07-10','fixed','Encargos','Escritório fiscal Marco',51.60,'Marco (MEI)','Boleto');
+  add('2026-07','2026-07-10','fixed','Encargos','Escritório fiscal Marco',51.60,'Marco Túlio','Boleto');
   add('2026-07','2026-07-20','fixed','Encargos','Escritório fiscal Teonia',90,'Teonia Ferreira','Boleto');
   add('2026-07','2026-07-20','fixed','Encargos','DAS MEI Samuel',75.60,'Samuel Macena','Boleto');
   add('2026-07','2026-07-20','fixed','Encargos','DAS MEI João',75.60,'João José de Abreu','Boleto');
-  add('2026-07','2026-07-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco (MEI)','Boleto');
+  add('2026-07','2026-07-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco Túlio','Boleto');
   add('2026-07','2026-07-20','fixed','Encargos','DAS MEI Teonia',75.60,'Teonia Ferreira','Boleto');
   add('2026-07','2026-07-10','fixed','Estrutura','Energia elétrica — Matriz',103.11);
   add('2026-07','2026-07-10','fixed','Estrutura','Energia elétrica — Casa de apoio',927.28);
@@ -530,7 +535,7 @@ function buildSeed(){
   add('2026-08','2026-08-05','fixed','Colaboradores','João (1ª quinzena)',900,'João José de Abreu','PIX');
   add('2026-08','2026-08-05','fixed','Colaboradores','Natália (1ª quinzena)',405,'Natália Sayonara','PIX');
   add('2026-08','2026-08-05','fixed','Colaboradores','Valéria (1ª quinzena)',405,'Valéria');
-  add('2026-08','2026-08-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco (MEI)','Transferência');
+  add('2026-08','2026-08-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco Túlio','Transferência');
   add('2026-08','2026-08-05','fixed','Colaboradores','Escritório de contabilidade',320.40,'Evanildo Luciano','Transferência');
   add('2026-08','2026-08-05','fixed','Colaboradores','Financeiro',213.60,'Taynara Bandeira','PIX');
   add('2026-08','2026-08-20','fixed','Colaboradores','Matheus Ferreira (2ª quinzena)',810.50,'Matheus Ferreira','PIX');
@@ -538,16 +543,16 @@ function buildSeed(){
   add('2026-08','2026-08-20','fixed','Colaboradores','Natália (2ª quinzena)',405,'Natália Sayonara','PIX');
   add('2026-08','2026-08-20','fixed','Colaboradores','Valéria (2ª quinzena)',405,'Valéria');
   add('2026-08','2026-08-20','fixed','Colaboradores','Teonia (resp. técnica)',2000,'Teonia Ferreira','PIX');
-  add('2026-08','2026-08-20','fixed','Colaboradores','M. Túlio (2ª quinzena)',1500,'Marco (MEI)','Transferência');
+  add('2026-08','2026-08-20','fixed','Colaboradores','M. Túlio (2ª quinzena)',1500,'Marco Túlio','Transferência');
   add('2026-08','2026-08-20','fixed','Colaboradores','Jurandir (2ª quinzena)',875,'Jurandir Silva','Transferência');
   add('2026-08','2026-08-20','reimbursement','Férias','Jurandir — férias',1600,'Jurandir Silva','Transferência');
   add('2026-08','2026-08-20','reimbursement','Outros','Teonia — reembolso de despesas pagas',690,'Teonia Ferreira','PIX');
   add('2026-08','2026-08-10','fixed','Encargos','Escritório fiscal Samuel',52.86,'Samuel Macena','Boleto');
-  add('2026-08','2026-08-10','fixed','Encargos','Escritório fiscal Marco',51.60,'Marco (MEI)','Boleto');
+  add('2026-08','2026-08-10','fixed','Encargos','Escritório fiscal Marco',51.60,'Marco Túlio','Boleto');
   add('2026-08','2026-08-20','fixed','Encargos','Escritório fiscal Teonia',90,'Teonia Ferreira','Boleto');
   add('2026-08','2026-08-20','fixed','Encargos','DAS MEI Samuel',75.60,'Samuel Macena','Boleto');
   add('2026-08','2026-08-20','fixed','Encargos','DAS MEI João',75.60,'João José de Abreu','Boleto');
-  add('2026-08','2026-08-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco (MEI)','Boleto');
+  add('2026-08','2026-08-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco Túlio','Boleto');
   add('2026-08','2026-08-20','fixed','Encargos','DAS MEI Teonia',75.60,'Teonia Ferreira','Boleto');
   add('2026-08','2026-08-10','fixed','Estrutura','Energia elétrica — Matriz',103.11);
   add('2026-08','2026-08-10','fixed','Estrutura','Energia elétrica — Casa de apoio',927.28);
@@ -570,7 +575,7 @@ function buildSeed(){
   add('2026-09','2026-09-05','fixed','Colaboradores','João (1ª quinzena)',900,'João José de Abreu','PIX');
   add('2026-09','2026-09-05','fixed','Colaboradores','Natália (1ª quinzena)',1000,'Natália Sayonara','PIX');
   add('2026-09','2026-09-05','fixed','Colaboradores','Valéria (1ª quinzena)',405,'Valéria');
-  add('2026-09','2026-09-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco (MEI)','Transferência');
+  add('2026-09','2026-09-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco Túlio','Transferência');
   add('2026-09','2026-09-05','fixed','Colaboradores','Escritório de contabilidade',320.40,'Evanildo Luciano','Transferência');
   add('2026-09','2026-09-05','fixed','Colaboradores','Financeiro',213.60,'Taynara Bandeira','PIX');
   add('2026-09','2026-09-20','fixed','Colaboradores','Matheus Ferreira (2ª quinzena)',810.50,'Matheus Ferreira','PIX');
@@ -581,11 +586,11 @@ function buildSeed(){
   add('2026-09','2026-09-20','fixed','Colaboradores','Jurandir (2ª quinzena)',625,'Jurandir Silva','Transferência','Base 875 - 250 pg celular');
   add('2026-09','2026-09-20','reimbursement','Outros','Teonia — reembolso de despesas pagas',690,'Teonia Ferreira','PIX');
   add('2026-09','2026-09-10','fixed','Encargos','Escritório fiscal Samuel',52.86,'Samuel Macena','Boleto');
-  add('2026-09','2026-09-10','fixed','Encargos','Escritório fiscal Marco',51.60,'Marco (MEI)','Boleto');
+  add('2026-09','2026-09-10','fixed','Encargos','Escritório fiscal Marco',51.60,'Marco Túlio','Boleto');
   add('2026-09','2026-09-20','fixed','Encargos','Escritório fiscal Teonia',90,'Teonia Ferreira','Boleto');
   add('2026-09','2026-09-20','fixed','Encargos','DAS MEI Samuel',75.60,'Samuel Macena','Boleto');
   add('2026-09','2026-09-20','fixed','Encargos','DAS MEI João',75.60,'João José de Abreu','Boleto');
-  add('2026-09','2026-09-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco (MEI)','Boleto');
+  add('2026-09','2026-09-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco Túlio','Boleto');
   add('2026-09','2026-09-20','fixed','Encargos','DAS MEI Teonia',75.60,'Teonia Ferreira','Boleto');
   add('2026-09','2026-09-10','fixed','Estrutura','Energia elétrica — Matriz',95.54);
   add('2026-09','2026-09-10','fixed','Estrutura','Energia elétrica — Casa de apoio',927.28);
@@ -613,7 +618,7 @@ function buildSeed(){
   add('2026-10','2026-10-05','fixed','Colaboradores','Valéria (1ª quinzena)',405,'Valéria');
   add('2026-10','2026-10-05','fixed','Colaboradores','João (1ª quinzena)',900,'João José de Abreu','PIX');
   add('2026-10','2026-10-05','fixed','Colaboradores','Natália (1ª quinzena)',1000,'Natália Sayonara','PIX');
-  add('2026-10','2026-10-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco (MEI)','Transferência');
+  add('2026-10','2026-10-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco Túlio','Transferência');
   add('2026-10','2026-10-05','fixed','Colaboradores','Escritório de contabilidade',320.40,'Evanildo Luciano','Transferência');
   add('2026-10','2026-10-05','fixed','Colaboradores','Financeiro',213.60,'Taynara Bandeira','PIX');
   add('2026-10','2026-10-20','fixed','Colaboradores','Matheus Ferreira (2ª quinzena)',810.50,'Matheus Ferreira','PIX');
@@ -625,11 +630,11 @@ function buildSeed(){
   add('2026-10','2026-10-20','reimbursement','Outros','Teonia — reembolso de despesas pagas',690,'Teonia Ferreira','PIX');
   add('2026-10','2026-10-20','reimbursement','Correios','Matheus — reembolso correios',41,'Matheus Ferreira','PIX');
   add('2026-10','2026-10-10','fixed','Encargos','Escritório fiscal Samuel',52.86,'Samuel Macena','Boleto');
-  add('2026-10','2026-10-10','fixed','Encargos','Escritório fiscal Marco',51.60,'Marco (MEI)','Boleto');
+  add('2026-10','2026-10-10','fixed','Encargos','Escritório fiscal Marco',51.60,'Marco Túlio','Boleto');
   add('2026-10','2026-10-20','fixed','Encargos','Escritório fiscal Teonia',90,'Teonia Ferreira','Boleto');
   add('2026-10','2026-10-20','fixed','Encargos','DAS MEI Samuel',75.60,'Samuel Macena','Boleto');
   add('2026-10','2026-10-20','fixed','Encargos','DAS MEI João',75.60,'João José de Abreu','Boleto');
-  add('2026-10','2026-10-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco (MEI)','Boleto');
+  add('2026-10','2026-10-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco Túlio','Boleto');
   add('2026-10','2026-10-20','fixed','Encargos','DAS MEI Teonia',75.60,'Teonia Ferreira','Boleto');
   add('2026-10','2026-10-10','fixed','Estrutura','Energia elétrica — Matriz',95.54);
   add('2026-10','2026-10-10','fixed','Estrutura','Energia elétrica — Casa de apoio',927.28);
@@ -653,7 +658,7 @@ function buildSeed(){
   add('2026-11','2026-11-05','fixed','Colaboradores','Valéria (1ª quinzena)',405,'Valéria','','','pending');
   add('2026-11','2026-11-05','fixed','Colaboradores','João (1ª quinzena)',900,'João José de Abreu','PIX','','pending');
   add('2026-11','2026-11-05','fixed','Colaboradores','Natália (1ª quinzena)',1000,'Natália Sayonara','PIX','','pending');
-  add('2026-11','2026-11-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco (MEI)','Transferência','','pending');
+  add('2026-11','2026-11-05','fixed','Colaboradores','M. Túlio (coordenação)',2000,'Marco Túlio','Transferência','','pending');
   add('2026-11','2026-11-05','fixed','Colaboradores','Escritório de contabilidade',320.40,'Evanildo Luciano','Transferência','','pending');
   add('2026-11','2026-11-05','fixed','Colaboradores','Financeiro',213.60,'Taynara Bandeira','PIX','','pending');
   add('2026-11','2026-11-20','fixed','Colaboradores','Matheus Ferreira (2ª quinzena)',810.50,'Matheus Ferreira','PIX','','pending');
@@ -665,11 +670,11 @@ function buildSeed(){
   add('2026-11','2026-11-20','reimbursement','Outros','Teonia — reembolso de despesas pagas',690,'Teonia Ferreira','PIX','','pending');
   add('2026-11','2026-11-20','reimbursement','Correios','Matheus — reembolso correios',57,'Matheus Ferreira','PIX','','pending');
   add('2026-11','2026-11-10','fixed','Encargos','Escritório fiscal Samuel',52.86,'Samuel Macena','Boleto','','pending');
-  add('2026-11','2026-11-10','fixed','Encargos','Escritório fiscal Marco',51.60,'Marco (MEI)','Boleto','','pending');
+  add('2026-11','2026-11-10','fixed','Encargos','Escritório fiscal Marco',51.60,'Marco Túlio','Boleto','','pending');
   add('2026-11','2026-11-20','fixed','Encargos','Escritório fiscal Teonia',90,'Teonia Ferreira','Boleto','','pending');
   add('2026-11','2026-11-20','fixed','Encargos','DAS MEI Samuel',75.60,'Samuel Macena','Boleto','','pending');
   add('2026-11','2026-11-20','fixed','Encargos','DAS MEI João',75.60,'João José de Abreu','Boleto','','pending');
-  add('2026-11','2026-11-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco (MEI)','Boleto','','pending');
+  add('2026-11','2026-11-20','fixed','Encargos','DAS MEI Marco',76.60,'Marco Túlio','Boleto','','pending');
   add('2026-11','2026-11-20','fixed','Encargos','DAS MEI Teonia',75.60,'Teonia Ferreira','Boleto','','pending');
   add('2026-11','2026-11-10','fixed','Estrutura','Energia elétrica — Matriz',95.54,'','','','pending');
   add('2026-11','2026-11-10','fixed','Estrutura','Energia elétrica — Casa de apoio',927.28,'','','','pending');
@@ -759,8 +764,10 @@ function nextMonthKey(key){
   return monthKey(d.getFullYear(), d.getMonth()+1);
 }
 function getMonth(key){
-  if (!state.months[key]) state.months[key] = { transactions: [], populated: false };
+  if (!state.months[key]) state.months[key] = { transactions: [], populated: false, notes: [] };
   const m = state.months[key];
+  if (!m.notes) m.notes = []; // Garante compatibilidade
+  
   if (!m.populated && state.templates.length > 0) {
     m.transactions = state.templates.filter(t => t.active !== false).map(t => ({
       id: uid(),
@@ -899,6 +906,22 @@ function loadFromText(text){
     if (!state.templates) state.templates = [];
     if (!state.contacts) state.contacts = getDefaultContacts();
     if (!state.services) state.services = getDefaultServices();
+    // Garantir notes e migrar nome do Marco
+    for (const k in state.months) {
+      if (!state.months[k].notes) state.months[k].notes = [];
+      for (const tx of state.months[k].transactions) {
+        if (tx.beneficiary === 'Marco (MEI)') tx.beneficiary = 'Marco Túlio';
+      }
+    }
+    // Migrar nomes nos templates
+    for (const t of state.templates) {
+      if (t.beneficiary === 'Marco (MEI)') t.beneficiary = 'Marco Túlio';
+    }
+    // Migrar nomes nos contatos
+    for (const c of state.contacts) {
+      if (c.name === 'Marco (MEI) / M. Túlio' || c.name === 'Marco (MEI)') c.name = 'Marco Túlio';
+    }
+    
     lastFileSave = new Date();
     hasUnsavedFileChanges = false;
     saveDraft();
@@ -942,6 +965,7 @@ function renderView(view){
   else if (view === 'reembolsos') renderReembolsos();
   else if (view === 'beneficiarios') renderBeneficiarios();
   else if (view === 'fixas') renderFixas();
+  else if (view === 'anotacoes') renderAnotacoes();
   else if (view === 'dados') renderDados();
   else if (view === 'relatorios') renderRelatorios();
   else if (view === 'config') renderConfig();
@@ -1366,6 +1390,90 @@ function removeTemplate(id){
   saveDraft(); renderFixas(); toast('Modelo excluído', 'success');
 }
 
+/* ============ ANOTAÇÕES ============ */
+function renderAnotacoes() {
+  const key = state.currentMonth;
+  const m = getMonth(key);
+  const notes = m.notes || [];
+
+  const notesHTML = notes.map(n => `
+    <div class="note-card">
+      <div class="actions-corner">
+        <button class="btn btn-sm" onclick="openEditNote('${n.id}')">✏️</button>
+      </div>
+      <h3>${esc(n.title)}</h3>
+      <div class="content-box" id="note-content-${n.id}">${esc(n.content)}</div>
+      <div class="footer-actions">
+        <span style="font-size:10px;color:var(--text-light)">${fmtDateFull(n.dateCreated)}</span>
+        <button class="btn btn-primary btn-sm" onclick="copyText('${esc(n.content).replace(/'/g, "\\'")}')">📋 Copiar</button>
+      </div>
+    </div>
+  `).join('');
+
+  const html = `
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Anotações e Códigos — ${monthLabel(key)}</h2>
+        <div class="actions">
+          <button class="btn btn-primary btn-sm" onclick="openEditNote()">+ Nova Anotação</button>
+        </div>
+      </div>
+      ${notes.length === 0 ? '<div class="empty">Nenhuma anotação para este mês. Adicione códigos de barras ou PIX copia e cola aqui.</div>' : `
+        <div class="data-grid" style="padding:18px">
+          ${notesHTML}
+        </div>
+      `}
+    </div>
+  `;
+  document.getElementById('view-anotacoes').innerHTML = html;
+}
+
+function openEditNote(id) {
+  const key = state.currentMonth;
+  const m = getMonth(key);
+  let n = id ? m.notes.find(x => x.id === id) : { id: uid(), title:'', content:'', dateCreated: new Date().toISOString() };
+  
+  document.getElementById('modalContent').innerHTML = `
+    <div class="modal-header"><h3>${id ? 'Editar' : 'Nova'} Anotação</h3><button class="close" onclick="closeModal()">×</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Título (Ex: Boleto Bradesco, PIX Aluguel)</label><input id="noteTitle" value="${esc(n.title)}"></div>
+      <div class="form-group"><label>Conteúdo (Cole o código de barras ou PIX)</label><textarea id="noteContent" style="min-height:100px;font-family:monospace">${esc(n.content)}</textarea></div>
+    </div>
+    <div class="modal-footer">
+      ${id ? `<button class="btn btn-danger" onclick="removeNote('${id}')">Excluir</button>` : ''}
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveNote('${n.id}')">Salvar</button>
+    </div>
+  `;
+  document.getElementById('modal').classList.add('show');
+}
+
+function saveNote(id) {
+  const key = state.currentMonth;
+  const m = getMonth(key);
+  const title = document.getElementById('noteTitle').value.trim();
+  const content = document.getElementById('noteContent').value.trim();
+  
+  if (!title) { toast('O título é obrigatório', 'error'); return; }
+  
+  const idx = m.notes.findIndex(x => x.id === id);
+  if (idx >= 0) {
+    m.notes[idx].title = title;
+    m.notes[idx].content = content;
+  } else {
+    m.notes.push({ id, title, content, dateCreated: new Date().toISOString() });
+  }
+  saveDraft(); closeModal(); renderAnotacoes(); toast('Anotação salva', 'success');
+}
+
+function removeNote(id) {
+  if (!confirm('Excluir esta anotação?')) return;
+  const key = state.currentMonth;
+  const m = getMonth(key);
+  m.notes = m.notes.filter(x => x.id !== id);
+  saveDraft(); closeModal(); renderAnotacoes(); toast('Anotação excluída', 'success');
+}
+
 /* ============ DADOS E ACESSOS ============ */
 function copyText(text) {
   if (!text) return;
@@ -1782,7 +1890,7 @@ function renderConfig(){
     <div class="panel">
       <div class="panel-header"><h2>Sobre</h2></div>
       <div style="padding:18px;font-size:13px;color:var(--text-light);line-height:1.7">
-        <p><strong>Gestão de Despesas — Projeto Resgate</strong> · v2.4</p>
+        <p><strong>Gestão de Despesas — Projeto Resgate</strong> · v2.5</p>
         <p>Ferramenta executada localmente no navegador. Não envia dados para servidores.</p>
       </div>
     </div>
@@ -2132,10 +2240,27 @@ function init(){
   const draft = loadDraft();
   if (draft && draft.months) {
     state = draft;
-    // Migração: se não tem contacts ou services, adiciona.
+    
+    // --- MIGRAÇÃO E CORREÇÕES ---
     if (!state.contacts) state.contacts = getDefaultContacts();
     if (!state.services) state.services = getDefaultServices();
-    // Migração: se tem 0 templates mas tem meses (indica versão antiga), extrai os modelos automaticamente.
+    for (const k in state.months) {
+      if (!state.months[k].notes) state.months[k].notes = [];
+      for (const tx of state.months[k].transactions) {
+        if (tx.beneficiary === 'Marco (MEI)') tx.beneficiary = 'Marco Túlio';
+      }
+    }
+    if (state.templates) {
+        for (const t of state.templates) {
+            if (t.beneficiary === 'Marco (MEI)') t.beneficiary = 'Marco Túlio';
+        }
+    }
+    if (state.contacts) {
+        for (const c of state.contacts) {
+            if (c.name === 'Marco (MEI) / M. Túlio' || c.name === 'Marco (MEI)') c.name = 'Marco Túlio';
+        }
+    }
+    
     if (state.templates.length === 0 && Object.keys(state.months).length > 0) {
         const tempMap = new Map();
         const mKeys = Object.keys(state.months).sort().reverse();
@@ -2149,8 +2274,8 @@ function init(){
             }
         }
         state.templates = Array.from(tempMap.values());
-        saveDraft();
     }
+    saveDraft();
     hasUnsavedFileChanges = true;
   } else {
     state = buildSeed();
