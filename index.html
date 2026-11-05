@@ -210,6 +210,7 @@ const PAY_METHODS = ['PIX','Transferência','Boleto','Débito em conta','Cartão
 const STATUS_LABELS = { paid:'Pago', pending:'Pendente' };
 const REIMB_STATUS_LABELS = { paid:'Devolvido', pending:'A devolver' };
 const STORAGE_KEY = 'projeto-resgate-v1';
+const BACKUP_KEY = 'projeto-resgate-v1-backup'; // Cópia de segurança
 
 let state = null;
 let fileHandle = null;
@@ -866,18 +867,35 @@ function allMonthKeys(){
   return Array.from(keys).sort();
 }
 
-/* ============ PERSISTÊNCIA ============ */
+/* ============ PERSISTÊNCIA BLINDADA ============ */
 function loadDraft(){
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      // Tenta restaurar da cópia de segurança se o principal sumir
+      raw = localStorage.getItem(BACKUP_KEY);
+      if (raw) {
+        localStorage.setItem(STORAGE_KEY, raw); // Restaura o principal
+      }
+    }
     if (raw) return JSON.parse(raw);
   } catch(e){ console.warn('Falha ao carregar rascunho', e); }
   return null;
 }
+
 function saveDraft(){
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); markDirty(); }
-  catch(e){ toast('Erro ao salvar rascunho', 'error'); }
+  try { 
+    const dataStr = JSON.stringify(state);
+    localStorage.setItem(STORAGE_KEY, dataStr); 
+    localStorage.setItem(BACKUP_KEY, dataStr); // Salva a cópia de segurança sempre
+    markDirty(); 
+  }
+  catch(e){ 
+    console.warn('Erro ao salvar rascunho:', e);
+    toast('Erro ao salvar dados no navegador', 'error'); 
+  }
 }
+
 function markDirty(){ hasUnsavedFileChanges = true; updateFileStatus(); }
 function updateFileStatus(){
   const el = document.getElementById('fileStatus');
@@ -2388,102 +2406,118 @@ function printAnnualReport(){
 
 /* ============ INICIALIZAÇÃO ============ */
 function fixLegacyData() {
-  if (!state.months) return;
-  
-  // 1. Corrigir nomes antigos
-  for (const k in state.months) {
-    if (!state.months[k].notes) state.months[k].notes = [];
-    for (const tx of state.months[k].transactions) {
-      if (tx.beneficiary === 'Marco (MEI)') tx.beneficiary = 'Marco Túlio';
-    }
-  }
-  if (state.templates) {
-    for (const t of state.templates) {
-      if (t.beneficiary === 'Marco (MEI)') t.beneficiary = 'Marco Túlio';
-    }
-  }
-  if (state.contacts) {
-    for (const c of state.contacts) {
-      if (c.name === 'Marco (MEI) / M. Túlio' || c.name === 'Marco (MEI)') c.name = 'Marco Túlio';
-    }
-  }
-
-  // 2. Re-calcular o 'day' dos templates baseado no histórico real
-  if (state.templates) {
-    state.templates.forEach(tpl => {
-      const baseDesc = tpl.description.replace(/\d+\s*\/\s*\d+/g, '').trim();
-      let foundDay = null;
-      
-      // Percorre os meses do mais recente para o mais antigo
-      const mKeys = Object.keys(state.months).sort().reverse();
-      for (const mk of mKeys) {
-        const mm = state.months[mk];
-        if (!mm || !mm.transactions) continue;
-        
-        const match = [...mm.transactions]
-          .sort((a,b) => (b.date||'').localeCompare(a.date||''))
-          .find(tx => tx.description.replace(/\d+\s*\/\s*\d+/g, '').trim() === baseDesc);
-          
-        if (match) {
-          foundDay = parseInt(match.date.split('-')[2]);
-          break;
-        }
+  try {
+    if (!state.months) return;
+    
+    // 1. Corrigir nomes antigos
+    for (const k in state.months) {
+      if (!state.months[k].notes) state.months[k].notes = [];
+      for (const tx of state.months[k].transactions) {
+        if (tx.beneficiary === 'Marco (MEI)') tx.beneficiary = 'Marco Túlio';
       }
-      if (foundDay) tpl.day = foundDay;
-      if (!tpl.day) tpl.day = 5;
-    });
-  }
+    }
+    if (state.templates) {
+      for (const t of state.templates) {
+        if (t.beneficiary === 'Marco (MEI)') t.beneficiary = 'Marco Túlio';
+      }
+    }
+    if (state.contacts) {
+      for (const c of state.contacts) {
+        if (c.name === 'Marco (MEI) / M. Túlio' || c.name === 'Marco (MEI)') c.name = 'Marco Túlio';
+      }
+    }
 
-  // 3. Corrigir lançamentos já gerados que ficaram no dia 05 errado
-  for (const k in state.months) {
-    for (const tx of state.months[k].transactions) {
-      if (tx.notes === 'Gerado a partir do modelo') {
-        const baseDesc = tx.description.replace(/\d+\s*\/\s*\d+/g, '').trim();
-        const tpl = state.templates.find(t => t.description.replace(/\d+\s*\/\s*\d+/g, '').trim() === baseDesc);
-        if (tpl && tpl.day) {
-          const currentDay = parseInt(tx.date.split('-')[2]);
-          if (currentDay !== tpl.day) {
-            tx.date = k + '-' + String(tpl.day).padStart(2, '0');
+    // 2. Re-calcular o 'day' dos templates baseado no histórico real
+    if (state.templates) {
+      state.templates.forEach(tpl => {
+        const baseDesc = tpl.description.replace(/\d+\s*\/\s*\d+/g, '').trim();
+        let foundDay = null;
+        
+        const mKeys = Object.keys(state.months).sort().reverse();
+        for (const mk of mKeys) {
+          const mm = state.months[mk];
+          if (!mm || !mm.transactions) continue;
+          
+          const match = [...mm.transactions]
+            .filter(tx => tx.date && tx.description)
+            .sort((a,b) => (b.date||'').localeCompare(a.date||''))
+            .find(tx => tx.description.replace(/\d+\s*\/\s*\d+/g, '').trim() === baseDesc);
+            
+          if (match) {
+            foundDay = parseInt(match.date.split('-')[2]);
+            break;
+          }
+        }
+        if (foundDay) tpl.day = foundDay;
+        if (!tpl.day) tpl.day = 5;
+      });
+    }
+
+    // 3. Corrigir lançamentos já gerados que ficaram no dia 05 errado
+    for (const k in state.months) {
+      for (const tx of state.months[k].transactions) {
+        if (tx.notes === 'Gerado a partir do modelo') {
+          const baseDesc = tx.description.replace(/\d+\s*\/\s*\d+/g, '').trim();
+          const tpl = state.templates.find(t => t.description.replace(/\d+\s*\/\s*\d+/g, '').trim() === baseDesc);
+          if (tpl && tpl.day) {
+            const currentDay = parseInt(tx.date.split('-')[2]);
+            if (currentDay !== tpl.day) {
+              tx.date = k + '-' + String(tpl.day).padStart(2, '0');
+            }
           }
         }
       }
     }
+  } catch(e) {
+    console.error("Erro na migração de dados:", e);
   }
 }
 
 function init(){
-  const draft = loadDraft();
-  if (draft && draft.months) {
-    state = draft;
-    
-    if (!state.contacts) state.contacts = getDefaultContacts();
-    if (!state.services) state.services = getDefaultServices();
-    if (!state.templates) state.templates = [];
-    
-    // Roda a correção
-    fixLegacyData();
-    
-    // Se não tinha templates, tenta extrair do histórico
-    if (state.templates.length === 0 && Object.keys(state.months).length > 0) {
-        const tempMap = new Map();
-        const mKeys = Object.keys(state.months).sort().reverse();
-        for (const mk of mKeys) {
-            for (const t of state.months[mk].transactions) {
-                if (t.type === 'fixed' && !tempMap.has(t.description)) {
-                    tempMap.set(t.description, {
-                        id: uid(), description: t.description, category: t.category, defaultAmount: t.amount, beneficiary: t.beneficiary, paymentMethod: t.paymentMethod, day: parseInt(t.date.split('-')[2]), active: true
-                    });
-                }
-            }
-        }
-        state.templates = Array.from(tempMap.values());
+  try {
+    const draft = loadDraft();
+    if (draft && draft.months) {
+      state = draft;
+      
+      if (!state.contacts) state.contacts = getDefaultContacts();
+      if (!state.services) state.services = getDefaultServices();
+      if (!state.templates) state.templates = [];
+      
+      // Roda a correção
+      fixLegacyData();
+      
+      // Se não tinha templates, tenta extrair do histórico
+      if (state.templates.length === 0 && Object.keys(state.months).length > 0) {
+          const tempMap = new Map();
+          const mKeys = Object.keys(state.months).sort().reverse();
+          for (const mk of mKeys) {
+              for (const t of state.months[mk].transactions) {
+                  if (t.type === 'fixed' && !tempMap.has(t.description)) {
+                      tempMap.set(t.description, {
+                          id: uid(), description: t.description, category: t.category, defaultAmount: t.amount, beneficiary: t.beneficiary, paymentMethod: t.paymentMethod, day: parseInt(t.date.split('-')[2]), active: true
+                      });
+                  }
+              }
+          }
+          state.templates = Array.from(tempMap.values());
+      }
+      
+      // GARANTE QUE SALVOU O ESTADO MIGRADO
+      saveDraft();
+      hasUnsavedFileChanges = true;
+    } else {
+      state = buildSeed();
+      hasUnsavedFileChanges = true;
+      // GARANTE QUE SALVA O SEED NOVO
+      saveDraft(); 
     }
-    saveDraft();
-    hasUnsavedFileChanges = true;
-  } else {
+  } catch(e) {
+    console.error("Erro no carregamento inicial, usando dados semente:", e);
     state = buildSeed();
     hasUnsavedFileChanges = true;
+    try { saveDraft(); } catch(err){}
   }
+  
   if (!state.currentMonth) state.currentMonth = '2026-11';
   if (!state.templates) state.templates = [];
   if (!state.contacts) state.contacts = getDefaultContacts();
@@ -2504,7 +2538,9 @@ function init(){
     }
   });
 
+  // SALVAMENTO DE EMERGÊNCIA ANTES DO F5
   window.addEventListener('beforeunload', (e) => {
+    saveDraft(); // Força o salvamento antes de fechar ou atualizar
     if (hasUnsavedFileChanges) {
       e.preventDefault();
       e.returnValue = 'Você tem alterações não salvas no arquivo. Salve antes de sair?';
