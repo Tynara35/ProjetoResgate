@@ -249,6 +249,45 @@ function getDefaultServices() {
   ];
 }
 
+/* ============ HELPERS DE MODELO ============ */
+function incrementDescription(desc) {
+  const match = desc.match(/(\d+)\s*\/\s*(\d+)/);
+  if (match) {
+    const current = parseInt(match[1]);
+    const total = parseInt(match[2]);
+    if (current < total) {
+      return desc.replace(match[0], `${current + 1}/${total}`);
+    }
+  }
+  return desc;
+}
+
+function getLatestTxData(template, targetMonthKey) {
+  // 1. Pega os meses anteriores
+  const keys = Object.keys(state.months).filter(k => k < targetMonthKey).sort().reverse();
+  
+  // Remove sufixos numéricos para achar o "esqueleto" da descrição
+  const targetBaseDesc = template.description.replace(/\d+\s*\/\s*\d+/g, '').trim();
+
+  for (const k of keys) {
+    const m = state.months[k];
+    if (!m || !m.transactions) continue;
+    
+    // Ordena transações do mês para pegar a última ocorrência
+    const sorted = [...m.transactions].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+    for (const t of sorted) {
+      const txBaseDesc = t.description.replace(/\d+\s*\/\s*\d+/g, '').trim();
+      if (txBaseDesc === targetBaseDesc) {
+        return {
+          day: parseInt(t.date.split('-')[2]),
+          nextDesc: incrementDescription(t.description)
+        };
+      }
+    }
+  }
+  return null;
+}
+
 /* ============ SEED (DADOS E MODELOS) ============ */
 function buildSeed(){
   const months = {};
@@ -708,14 +747,16 @@ function buildSeed(){
   for (const mk of monthKeys) {
     for (const t of months[mk].transactions) {
       if (t.type === 'fixed') {
-        if (!templatesMap.has(t.description)) {
-          templatesMap.set(t.description, {
+        const baseDesc = t.description.replace(/\d+\s*\/\s*\d+/g, '').trim();
+        if (!templatesMap.has(baseDesc)) {
+          templatesMap.set(baseDesc, {
             id: uid(),
-            description: t.description,
+            description: t.description, // Pega o valor mais recente (ex: 30/42)
             category: t.category,
             defaultAmount: t.amount,
             beneficiary: t.beneficiary,
             paymentMethod: t.paymentMethod,
+            day: parseInt(t.date.split('-')[2]),
             active: true
           });
         }
@@ -726,7 +767,7 @@ function buildSeed(){
   const templates = Array.from(templatesMap.values());
 
   return { 
-    version:2, 
+    version:3, 
     months, 
     templates, 
     contacts: getDefaultContacts(),
@@ -772,30 +813,39 @@ function nextMonthKey(key){
   const d = new Date(y, m, 1);
   return monthKey(d.getFullYear(), d.getMonth()+1);
 }
+
 function getMonth(key){
   if (!state.months[key]) state.months[key] = { transactions: [], populated: false, notes: [] };
   const m = state.months[key];
   if (!m.notes) m.notes = []; // Garante compatibilidade
   
   if (!m.populated && state.templates.length > 0) {
-    m.transactions = state.templates.filter(t => t.active !== false).map(t => ({
-      id: uid(),
-      date: key + '-05',
-      type: 'fixed',
-      category: t.category,
-      description: t.description,
-      amount: Number(t.defaultAmount)||0,
-      beneficiary: t.beneficiary || '',
-      paymentMethod: t.paymentMethod || '—',
-      status: 'pending',
-      notes: 'Gerado a partir do modelo'
-    }));
+    m.transactions = state.templates.filter(t => t.active !== false).map(t => {
+      // Busca dados do mês anterior
+      const latestInfo = getLatestTxData(t, key);
+      const targetDay = latestInfo ? latestInfo.day : (t.day || 5);
+      const targetDesc = latestInfo ? latestInfo.nextDesc : t.description;
+      
+      return {
+        id: uid(),
+        date: key + '-' + String(targetDay).padStart(2, '0'),
+        type: 'fixed',
+        category: t.category,
+        description: targetDesc,
+        amount: Number(t.defaultAmount)||0,
+        beneficiary: t.beneficiary || '',
+        paymentMethod: t.paymentMethod || '—',
+        status: 'pending',
+        notes: 'Gerado a partir do modelo'
+      };
+    });
     m.populated = true;
     saveDraft();
     toast('Mês criado com as despesas fixas do modelo', 'success');
   }
   return m;
 }
+
 function getTotals(key){
   const m = state.months[key];
   if (!m) return { fixed:0, variable:0, reimbursement:0, total:0, pending:0, paid:0 };
@@ -922,9 +972,10 @@ function loadFromText(text){
         if (tx.beneficiary === 'Marco (MEI)') tx.beneficiary = 'Marco Túlio';
       }
     }
-    // Migrar nomes nos templates
+    // Migrar nomes nos templates e garantir 'day'
     for (const t of state.templates) {
       if (t.beneficiary === 'Marco (MEI)') t.beneficiary = 'Marco Túlio';
+      if (!t.day) t.day = 5; // Fallback para templates antigos
     }
     // Migrar nomes nos contatos
     for (const c of state.contacts) {
@@ -1120,6 +1171,17 @@ function getFilteredTransactions(key) {
   });
 }
 
+function clearMonthTransactions() {
+  if (!confirm('⚠️ ATENÇÃO: Isso vai apagar TODOS os lançamentos do mês de ' + monthLabel(state.currentMonth) + '.\n\nSe você avançar para o próximo mês, eles serão gerados novamente a partir dos Modelos Fixos.\n\nTem certeza que deseja continuar?')) return;
+  
+  const key = state.currentMonth;
+  state.months[key].transactions = [];
+  state.months[key].populated = false;
+  saveDraft();
+  renderLancamentos();
+  toast('Todos os lançamentos do mês foram apagados.', 'success');
+}
+
 function renderLancamentos(){
   const key = state.currentMonth;
   const m = getMonth(key);
@@ -1141,6 +1203,7 @@ function renderLancamentos(){
           <button class="btn btn-primary btn-sm" onclick="openNewModal('fixed')">+ Fixa</button>
           <button class="btn btn-primary btn-sm" onclick="openNewModal('variable')">+ Variável</button>
           <button class="btn btn-primary btn-sm" onclick="openNewModal('reimbursement')">+ Reembolso</button>
+          <button class="btn btn-danger btn-sm" onclick="clearMonthTransactions()">🗑️ Excluir Mês</button>
           <button class="btn btn-sm" onclick="printMonthlyReport()">🖨️ PDF</button>
         </div>
       </div>
@@ -1397,7 +1460,7 @@ function renderFixas(){
       ${state.templates.length === 0 ? '<div class="empty">Nenhum modelo cadastrado. Use "Sugerir do mês atual" para importar as despesas fixas de ' + monthLabel(state.currentMonth) + '.</div>' : `
         <table>
           <thead>
-            <tr><th>Descrição</th><th>Categoria</th><th>Beneficiário</th><th class="num">Valor</th><th>Status</th><th class="actions">Ações</th></tr>
+            <tr><th>Descrição</th><th>Categoria</th><th>Beneficiário</th><th class="num">Valor</th><th>Dia</th><th>Status</th><th class="actions">Ações</th></tr>
           </thead>
           <tbody>
             ${state.templates.map(t => `
@@ -1406,6 +1469,7 @@ function renderFixas(){
                 <td>${esc(t.category)}</td>
                 <td>${esc(t.beneficiary) || '—'}</td>
                 <td class="num">${fmtBRL(t.defaultAmount)}</td>
+                <td>${t.day || 5}</td>
                 <td>${t.active !== false ? '<span class="badge paid">Ativo</span>' : '<span class="badge pending">Inativo</span>'}</td>
                 <td class="actions">
                   <button class="btn btn-sm" onclick="toggleTemplate('${t.id}')">${t.active !== false ? 'Desativar' : 'Ativar'}</button>
@@ -1428,7 +1492,16 @@ function suggestFromCurrent(){
   let added = 0;
   m.transactions.filter(t => t.type === 'fixed').forEach(t => {
     if (!existing.has(t.description)){
-      state.templates.push({ id: uid(), description: t.description, category: t.category, defaultAmount: t.amount, beneficiary: t.beneficiary, paymentMethod: t.paymentMethod, active: true });
+      state.templates.push({ 
+        id: uid(), 
+        description: t.description, 
+        category: t.category, 
+        defaultAmount: t.amount, 
+        beneficiary: t.beneficiary, 
+        paymentMethod: t.paymentMethod, 
+        day: parseInt(t.date.split('-')[2]),
+        active: true 
+      });
       added++;
     }
   });
@@ -1438,7 +1511,7 @@ function openNewTemplate(){ openTemplateModal(); }
 function openEditTemplate(id){ const t = state.templates.find(x => x.id === id); if (t) openTemplateModal(t); }
 function openTemplateModal(t){
   const isEdit = !!t;
-  t = t || { id: uid(), description:'', category:'Colaboradores', defaultAmount:0, beneficiary:'', paymentMethod:'PIX', active:true };
+  t = t || { id: uid(), description:'', category:'Colaboradores', defaultAmount:0, beneficiary:'', paymentMethod:'PIX', day: 5, active:true };
   document.getElementById('modalContent').innerHTML = `
     <div class="modal-header"><h3>${isEdit ? 'Editar' : 'Novo'} modelo</h3><button class="close" onclick="closeModal()">×</button></div>
     <div class="modal-body">
@@ -1450,6 +1523,9 @@ function openTemplateModal(t){
       <div class="form-row">
         <div class="form-group"><label>Beneficiário</label><input id="tplBen" value="${esc(t.beneficiary) || ''}"></div>
         <div class="form-group"><label>Forma de pagamento</label><select id="tplPay">${PAY_METHODS.map(p => `<option ${p===t.paymentMethod?'selected':''}>${p}</option>`).join('')}</select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Dia do Vencimento</label><input id="tplDay" type="number" min="1" max="31" value="${t.day || 5}"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1467,6 +1543,7 @@ function saveTemplate(id){
     defaultAmount: Number(document.getElementById('tplAmt').value)||0,
     beneficiary: document.getElementById('tplBen').value.trim(),
     paymentMethod: document.getElementById('tplPay').value,
+    day: Number(document.getElementById('tplDay').value) || 5,
     active: true
   };
   const idx = state.templates.findIndex(t => t.id === id);
@@ -1981,7 +2058,7 @@ function renderConfig(){
     <div class="panel">
       <div class="panel-header"><h2>Sobre</h2></div>
       <div style="padding:18px;font-size:13px;color:var(--text-light);line-height:1.7">
-        <p><strong>Gestão de Despesas — Projeto Resgate</strong> · v2.7</p>
+        <p><strong>Gestão de Despesas — Projeto Resgate</strong> · v2.8</p>
         <p>Ferramenta executada localmente no navegador. Não envia dados para servidores.</p>
       </div>
     </div>
@@ -2344,6 +2421,7 @@ function init(){
     if (state.templates) {
         for (const t of state.templates) {
             if (t.beneficiary === 'Marco (MEI)') t.beneficiary = 'Marco Túlio';
+            if (!t.day) t.day = 5; // Fallback para templates antigos
         }
     }
     if (state.contacts) {
@@ -2359,7 +2437,7 @@ function init(){
             for (const t of state.months[mk].transactions) {
                 if (t.type === 'fixed' && !tempMap.has(t.description)) {
                     tempMap.set(t.description, {
-                        id: uid(), description: t.description, category: t.category, defaultAmount: t.amount, beneficiary: t.beneficiary, paymentMethod: t.paymentMethod, active: true
+                        id: uid(), description: t.description, category: t.category, defaultAmount: t.amount, beneficiary: t.beneficiary, paymentMethod: t.paymentMethod, day: parseInt(t.date.split('-')[2]), active: true
                     });
                 }
             }
