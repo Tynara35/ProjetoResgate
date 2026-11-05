@@ -263,17 +263,13 @@ function incrementDescription(desc) {
 }
 
 function getLatestTxData(template, targetMonthKey) {
-  // 1. Pega os meses anteriores
   const keys = Object.keys(state.months).filter(k => k < targetMonthKey).sort().reverse();
-  
-  // Remove sufixos numéricos para achar o "esqueleto" da descrição
   const targetBaseDesc = template.description.replace(/\d+\s*\/\s*\d+/g, '').trim();
 
   for (const k of keys) {
     const m = state.months[k];
     if (!m || !m.transactions) continue;
     
-    // Ordena transações do mês para pegar a última ocorrência
     const sorted = [...m.transactions].sort((a,b) => (b.date||'').localeCompare(a.date||''));
     for (const t of sorted) {
       const txBaseDesc = t.description.replace(/\d+\s*\/\s*\d+/g, '').trim();
@@ -965,22 +961,9 @@ function loadFromText(text){
     if (!state.templates) state.templates = [];
     if (!state.contacts) state.contacts = getDefaultContacts();
     if (!state.services) state.services = getDefaultServices();
-    // Garantir notes e migrar nome do Marco
-    for (const k in state.months) {
-      if (!state.months[k].notes) state.months[k].notes = [];
-      for (const tx of state.months[k].transactions) {
-        if (tx.beneficiary === 'Marco (MEI)') tx.beneficiary = 'Marco Túlio';
-      }
-    }
-    // Migrar nomes nos templates e garantir 'day'
-    for (const t of state.templates) {
-      if (t.beneficiary === 'Marco (MEI)') t.beneficiary = 'Marco Túlio';
-      if (!t.day) t.day = 5; // Fallback para templates antigos
-    }
-    // Migrar nomes nos contatos
-    for (const c of state.contacts) {
-      if (c.name === 'Marco (MEI) / M. Túlio' || c.name === 'Marco (MEI)') c.name = 'Marco Túlio';
-    }
+    
+    // Aplica a correção automática (mesma função do init)
+    fixLegacyData();
     
     lastFileSave = new Date();
     hasUnsavedFileChanges = false;
@@ -2404,32 +2387,83 @@ function printAnnualReport(){
 }
 
 /* ============ INICIALIZAÇÃO ============ */
+function fixLegacyData() {
+  if (!state.months) return;
+  
+  // 1. Corrigir nomes antigos
+  for (const k in state.months) {
+    if (!state.months[k].notes) state.months[k].notes = [];
+    for (const tx of state.months[k].transactions) {
+      if (tx.beneficiary === 'Marco (MEI)') tx.beneficiary = 'Marco Túlio';
+    }
+  }
+  if (state.templates) {
+    for (const t of state.templates) {
+      if (t.beneficiary === 'Marco (MEI)') t.beneficiary = 'Marco Túlio';
+    }
+  }
+  if (state.contacts) {
+    for (const c of state.contacts) {
+      if (c.name === 'Marco (MEI) / M. Túlio' || c.name === 'Marco (MEI)') c.name = 'Marco Túlio';
+    }
+  }
+
+  // 2. Re-calcular o 'day' dos templates baseado no histórico real
+  if (state.templates) {
+    state.templates.forEach(tpl => {
+      const baseDesc = tpl.description.replace(/\d+\s*\/\s*\d+/g, '').trim();
+      let foundDay = null;
+      
+      // Percorre os meses do mais recente para o mais antigo
+      const mKeys = Object.keys(state.months).sort().reverse();
+      for (const mk of mKeys) {
+        const mm = state.months[mk];
+        if (!mm || !mm.transactions) continue;
+        
+        const match = [...mm.transactions]
+          .sort((a,b) => (b.date||'').localeCompare(a.date||''))
+          .find(tx => tx.description.replace(/\d+\s*\/\s*\d+/g, '').trim() === baseDesc);
+          
+        if (match) {
+          foundDay = parseInt(match.date.split('-')[2]);
+          break;
+        }
+      }
+      if (foundDay) tpl.day = foundDay;
+      if (!tpl.day) tpl.day = 5;
+    });
+  }
+
+  // 3. Corrigir lançamentos já gerados que ficaram no dia 05 errado
+  for (const k in state.months) {
+    for (const tx of state.months[k].transactions) {
+      if (tx.notes === 'Gerado a partir do modelo') {
+        const baseDesc = tx.description.replace(/\d+\s*\/\s*\d+/g, '').trim();
+        const tpl = state.templates.find(t => t.description.replace(/\d+\s*\/\s*\d+/g, '').trim() === baseDesc);
+        if (tpl && tpl.day) {
+          const currentDay = parseInt(tx.date.split('-')[2]);
+          if (currentDay !== tpl.day) {
+            tx.date = k + '-' + String(tpl.day).padStart(2, '0');
+          }
+        }
+      }
+    }
+  }
+}
+
 function init(){
   const draft = loadDraft();
   if (draft && draft.months) {
     state = draft;
     
-    // --- MIGRAÇÃO E CORREÇÕES ---
     if (!state.contacts) state.contacts = getDefaultContacts();
     if (!state.services) state.services = getDefaultServices();
-    for (const k in state.months) {
-      if (!state.months[k].notes) state.months[k].notes = [];
-      for (const tx of state.months[k].transactions) {
-        if (tx.beneficiary === 'Marco (MEI)') tx.beneficiary = 'Marco Túlio';
-      }
-    }
-    if (state.templates) {
-        for (const t of state.templates) {
-            if (t.beneficiary === 'Marco (MEI)') t.beneficiary = 'Marco Túlio';
-            if (!t.day) t.day = 5; // Fallback para templates antigos
-        }
-    }
-    if (state.contacts) {
-        for (const c of state.contacts) {
-            if (c.name === 'Marco (MEI) / M. Túlio' || c.name === 'Marco (MEI)') c.name = 'Marco Túlio';
-        }
-    }
+    if (!state.templates) state.templates = [];
     
+    // Roda a correção
+    fixLegacyData();
+    
+    // Se não tinha templates, tenta extrair do histórico
     if (state.templates.length === 0 && Object.keys(state.months).length > 0) {
         const tempMap = new Map();
         const mKeys = Object.keys(state.months).sort().reverse();
