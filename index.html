@@ -2557,6 +2557,14 @@ init();
         .then(reg => console.log('Service Worker registrado!', reg))
         .catch(err => console.warn('Erro ao registrar Service Worker', err));
     });
+
+    // ESCUTA A TROCA DE VERSÃO E RECARREGA A PÁGINA AUTOMATICAMENTE
+    let refreshing;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      window.location.reload();
+      refreshing = true;
+    });
   }
 </script>
 </body>
